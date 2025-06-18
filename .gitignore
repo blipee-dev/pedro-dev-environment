@@ -1,0 +1,56 @@
+# Pedro's Elite Development Environment - Git Ignore
+
+# === SYSTEM FILES ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === LOGS ===
+*.log
+logs/
+automation/blipee-toolpad/logs/
+
+# === TEMPORARY FILES ===
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# === NODE.JS ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === VS CODE ===
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.vscode/*.code-snippets
+
+# === BACKUP FILES ===
+*.backup
+*.bak
+*.old
+*~
+
+# === PERSONAL CONFIGURATIONS ===
+# Uncomment these if you want to keep personal configs private
+# configs/.gitconfig
+# configs/.zshrc
+
+# === CACHE ===
+.cache/
+.npm/
+.pnpm-store/
+
+# === ENVIRONMENT VARIABLES ===
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

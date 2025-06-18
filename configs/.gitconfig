@@ -1,0 +1,123 @@
+# Pedro's Elite Git Configuration
+# Enhanced Git settings for professional development
+
+[core]
+    editor = code --wait
+    autocrlf = input
+    safecrlf = true
+    excludesfile = ~/.gitignore_global
+
+[init]
+    defaultBranch = main
+
+[push]
+    default = simple
+    autoSetupRemote = true
+
+[pull]
+    rebase = true
+
+[rebase]
+    autoStash = true
+
+[merge]
+    tool = vscode
+
+[mergetool "vscode"]
+    cmd = code --wait $MERGED
+
+[diff]
+    tool = vscode
+    colorMoved = default
+
+[difftool "vscode"]
+    cmd = code --wait --diff $LOCAL $REMOTE
+
+# Beautiful delta pager for diffs
+[core]
+    pager = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true
+    light = false
+    line-numbers = true
+    syntax-theme = Nord
+
+[merge]
+    conflictstyle = diff3
+
+[diff]
+    colorMoved = default
+
+# Aliases for Git workflow
+[alias]
+    # Status
+    s = status --short --branch
+    st = status
+
+    # Commits
+    c = commit
+    cm = commit -m
+    ca = commit --amend
+    can = commit --amend --no-edit
+
+    # Branches
+    b = branch
+    co = checkout
+    cb = checkout -b
+    sw = switch
+    swc = switch -c
+
+    # Remotes
+    f = fetch
+    fo = fetch origin
+    p = push
+    pl = pull
+    pf = push --force-with-lease
+
+    # Logs
+    l = log --oneline --graph --decorate
+    la = log --oneline --graph --decorate --all
+    lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+
+    # Diffs
+    d = diff
+    dc = diff --cached
+    ds = diff --stat
+
+    # Stash
+    sta = stash push
+    stp = stash pop
+    stl = stash list
+
+    # Rebase
+    rb = rebase
+    rbi = rebase -i
+    rbc = rebase --continue
+    rba = rebase --abort
+
+    # Utilities
+    unstage = reset HEAD --
+    last = log -1 HEAD
+    visual = !gitk
+    type = cat-file -t
+    dump = cat-file -p
+
+# GitHub CLI integration
+[credential]
+    helper = osxkeychain
+
+# Security
+[transfer]
+    fsckobjects = true
+[fetch]
+    fsckobjects = true
+[receive]
+    fsckObjects = true
+
+# Performance
+[gc]
+    auto = 256
