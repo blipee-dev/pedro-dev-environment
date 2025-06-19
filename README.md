@@ -17,7 +17,7 @@
 ## 🚀 **One-Command Installation**
 
 ```bash
-curl -s https://raw.githubusercontent.com/pedro/pedro-dev-environment/main/setup.sh | bash
+curl -s https://raw.githubusercontent.com/blipee-dev/pedro-dev-environment/main/setup.sh | bash
 ```
 
 **That's it!** ✨ Your elite development environment is ready in minutes.
@@ -107,7 +107,7 @@ blipee smart-commit  # AI-assisted commit with quality gates
 
 ### **Setup on New Machine**
 ```bash
-curl -s https://raw.githubusercontent.com/pedro/pedro-dev-environment/main/setup.sh | bash
+curl -s https://raw.githubusercontent.com/blipee-dev/pedro-dev-environment/main/setup.sh | bash
 ```
 
 ### **Keep Environment Updated**

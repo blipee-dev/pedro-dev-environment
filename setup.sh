@@ -2,7 +2,7 @@
 
 # Pedro's Elite Development Environment Setup
 # One-command setup for world-class development environment
-# Usage: curl -s https://raw.githubusercontent.com/pedro/pedro-dev-environment/main/setup.sh | bash
+# Usage: curl -s https://raw.githubusercontent.com/blipee-dev/pedro-dev-environment/main/setup.sh | bash
 
 set -e
 
@@ -84,7 +84,7 @@ setup_repository() {
         git pull origin main
     else
         log "GEAR" "Cloning development environment repository..."
-        git clone https://github.com/pedro/pedro-dev-environment.git "$env_dir"
+        git clone https://github.com/blipee-dev/pedro-dev-environment.git "$env_dir"
         cd "$env_dir"
     fi
     

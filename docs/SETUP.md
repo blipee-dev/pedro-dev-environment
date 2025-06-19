@@ -28,13 +28,13 @@ This repository contains Pedro's world-class development environment configurati
 
 ### **One-Command Setup (Recommended)**
 ```bash
-curl -s https://raw.githubusercontent.com/pedro/pedro-dev-environment/main/setup.sh | bash
+curl -s https://raw.githubusercontent.com/blipee-dev/pedro-dev-environment/main/setup.sh | bash
 ```
 
 ### **Manual Installation**
 ```bash
 # Clone repository
-git clone https://github.com/pedro/pedro-dev-environment.git ~/dev-environment
+git clone https://github.com/blipee-dev/pedro-dev-environment.git ~/dev-environment
 cd ~/dev-environment
 
 # Run setup
