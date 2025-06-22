@@ -1,0 +1,2097 @@
+#!/bin/bash
+
+# Blipee Toolpad - Elite Development Automation CLI
+# A comprehensive automation system for world-class development workflows
+
+VERSION="1.0.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")/blipee-toolpad"
+AUTOMATION_DIR="$SCRIPT_DIR"
+LOGS_DIR="$AUTOMATION_DIR/logs"
+CONFIG_DIR="$AUTOMATION_DIR/config"
+
+# Ensure logs directory exists
+mkdir -p "$LOGS_DIR"
+
+# Colors for beautiful output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m' # No Color
+
+# Icons for visual feedback
+SUCCESS="✅"
+ERROR="❌"
+WARNING="⚠️"
+INFO="ℹ️"
+ROCKET="🚀"
+GEAR="⚙️"
+SPARKLES="✨"
+
+# Logging function
+log() {
+    local level=$1
+    shift
+    local message="$*"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    case $level in
+        "SUCCESS") echo -e "${GREEN}${SUCCESS} $message${NC}" ;;
+        "ERROR") echo -e "${RED}${ERROR} $message${NC}" ;;
+        "WARNING") echo -e "${YELLOW}${WARNING} $message${NC}" ;;
+        "INFO") echo -e "${CYAN}${INFO} $message${NC}" ;;
+        "ROCKET") echo -e "${PURPLE}${ROCKET} $message${NC}" ;;
+        "GEAR") echo -e "${BLUE}${GEAR} $message${NC}" ;;
+        "SPARKLES") echo -e "${YELLOW}${SPARKLES} $message${NC}" ;;
+    esac
+    
+    # Also log to file
+    echo "[$timestamp] [$level] $message" >> "$LOGS_DIR/blipee.log"
+}
+
+# Help function
+show_help() {
+    echo -e "${PURPLE}${ROCKET} Blipee Toolpad - Elite Development Automation CLI v$VERSION${NC}"
+    echo ""
+    echo -e "${WHITE}FOUNDATION COMMANDS (Phase 1):${NC}"
+    echo -e "  ${GREEN}start${NC}           Start complete development environment"
+    echo -e "  ${GREEN}stop${NC}            Stop all development processes"
+    echo -e "  ${GREEN}status${NC}          Show comprehensive project status"
+    echo -e "  ${GREEN}clean${NC}           Intelligent workspace cleanup (3 levels)"
+    echo -e "  ${GREEN}tidy${NC}            Quick auto-cleanup (Level 1 only)"
+    echo -e "  ${GREEN}health${NC}          Run complete system health check"
+    echo ""
+    echo -e "${WHITE}GIT WORKFLOW COMMANDS (Phase 1):${NC}"
+    echo -e "  ${GREEN}commit${NC}          Smart commit with automated checks"
+    echo -e "  ${GREEN}push${NC}            Safe push with pre-push validation"
+    echo -e "  ${GREEN}sync${NC}            Sync with remote (pull + push)"
+    echo -e "  ${GREEN}branch${NC} <name>   Create branch with conventions"
+    echo ""
+    echo -e "${WHITE}QUALITY COMMANDS (Phase 1):${NC}"
+    echo -e "  ${GREEN}format${NC}          Auto-format all code"
+    echo -e "  ${GREEN}lint${NC}            Run linting with auto-fix"
+    echo -e "  ${GREEN}test${NC}            Run comprehensive test suite"
+    echo -e "  ${GREEN}check${NC}           Run all quality checks"
+    echo -e "  ${GREEN}watch${NC}           Start file watcher for auto-quality"
+    echo -e "  ${GREEN}watch-stop${NC}      Stop file watcher"
+    echo ""
+    echo -e "${WHITE}INTELLIGENT COMMANDS (Phase 2):${NC}"
+    echo -e "  ${GREEN}smart-commit${NC}    AI-assisted commit workflow"
+    echo -e "  ${GREEN}auto-test${NC}       Generate and run tests"
+    echo -e "  ${GREEN}refactor${NC}        AI-guided code improvements"
+    echo -e "  ${GREEN}docs${NC}            Generate documentation"
+    echo -e "  ${GREEN}pre-dev${NC}         Pre-development documentation check"
+    echo -e "  ${GREEN}coverage${NC}        Check test coverage status"
+    echo ""
+    echo -e "${WHITE}UTILITY COMMANDS:${NC}"
+    echo -e "  ${GREEN}logs${NC}            View automation logs"
+    echo -e "  ${GREEN}config${NC}          Configure automation settings"
+    echo -e "  ${GREEN}update${NC}          Update automation scripts"
+    echo -e "  ${GREEN}version${NC}         Show version information"
+    echo -e "  ${GREEN}help${NC}            Show this help message"
+    echo ""
+    echo -e "${CYAN}${INFO} For detailed documentation, see: PROJECT_WORKFLOW.md${NC}"
+}
+
+# Check if required tools are available
+check_dependencies() {
+    local deps=("node" "npm" "git")
+    local missing=()
+    
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
+    
+    # Special check for VS Code - try both command and full path
+    if ! command -v "code" &> /dev/null && ! [ -f "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ]; then
+        missing+=("code")
+    fi
+    
+    if [ ${#missing[@]} -ne 0 ]; then
+        log "ERROR" "Missing dependencies: ${missing[*]}"
+        log "INFO" "To install VS Code CLI: Add VS Code to PATH or install from https://code.visualstudio.com"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Quality standards configuration
+REQUIRED_TEST_COVERAGE=95
+REQUIRED_TEST_PASS_RATE=100
+DOCUMENTATION_FIRST=true
+
+# Check if documentation exists for new features
+check_documentation_first() {
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "INFO" "Not in a git repository - skipping documentation-first check"
+        return 0
+    fi
+    
+    local changed_files=$(git diff --cached --name-only 2>/dev/null | grep -E '\.(js|jsx|ts|tsx)$' || true)
+    
+    if [ -z "$changed_files" ]; then
+        return 0
+    fi
+    
+    log "GEAR" "Checking documentation-first requirement..."
+    
+    local missing_docs=()
+    local has_new_features=false
+    
+    # Check if this appears to be a new feature
+    while IFS= read -r file; do
+        if [ -n "$file" ]; then
+            # Check if file is new
+            if git diff --cached --name-status 2>/dev/null | grep -q "^A.*$file"; then
+                has_new_features=true
+                
+                # Look for corresponding documentation
+                local doc_found=false
+                local base_name=$(basename "$file" | sed 's/\.[^.]*$//')
+                local dir_name=$(dirname "$file")
+                
+                # Check for various documentation patterns
+                for doc_pattern in "${base_name}.md" "README.md" "DOCUMENTATION.md" "API.md"; do
+                    if [ -f "$dir_name/$doc_pattern" ] || [ -f "docs/$doc_pattern" ] || [ -f "$doc_pattern" ]; then
+                        doc_found=true
+                        break
+                    fi
+                done
+                
+                # Check for JSDoc comments in the file
+                if [ "$doc_found" = false ] && [ -f "$file" ]; then
+                    if grep -q "\/\*\*\|@param\|@returns\|@description" "$file" 2>/dev/null; then
+                        doc_found=true
+                    fi
+                fi
+                
+                if [ "$doc_found" = false ]; then
+                    missing_docs+=("$file")
+                fi
+            fi
+        fi
+    done <<< "$changed_files"
+    
+    if [ "$has_new_features" = true ] && [ ${#missing_docs[@]} -gt 0 ]; then
+        log "ERROR" "Documentation-first violation detected!"
+        echo ""
+        echo "📚 Missing documentation for new files:"
+        for file in "${missing_docs[@]}"; do
+            echo "  ❌ $file"
+        done
+        echo ""
+        echo "💡 Before adding new code, please create documentation:"
+        echo "   1. Add JSDoc comments to functions/classes"
+        echo "   2. Create/update README.md or relevant .md files"
+        echo "   3. Document API endpoints, components, or utilities"
+        echo ""
+        echo "📖 Documentation should include:"
+        echo "   • Purpose and functionality"
+        echo "   • Parameters and return values"
+        echo "   • Usage examples"
+        echo "   • Edge cases and limitations"
+        echo ""
+        return 1
+    fi
+    
+    if [ "$has_new_features" = true ]; then
+        log "SUCCESS" "Documentation-first requirement satisfied"
+    fi
+    
+    return 0
+}
+
+# Check test coverage
+check_test_coverage() {
+    log "GEAR" "Checking test coverage requirement (>= ${REQUIRED_TEST_COVERAGE}%)..."
+    
+    cd "$PROJECT_ROOT" || return 1
+    
+    # Check if test coverage is configured
+    if ! grep -q '"coverage"\|"test.*coverage"\|"nyc"\|"jest.*coverage"\|"vitest.*coverage"' package.json 2>/dev/null; then
+        log "WARNING" "No test coverage configuration found in package.json"
+        log "INFO" "Consider adding coverage scripts like: npm run test:coverage"
+        return 1
+    fi
+    
+    # Run tests with coverage
+    local coverage_output=""
+    local coverage_percentage=0
+    
+    if command -v pnpm &> /dev/null; then
+        # Try common coverage commands
+        if grep -q '"test:coverage"' package.json; then
+            coverage_output=$(pnpm run test:coverage 2>&1 || true)
+        elif grep -q '"coverage"' package.json; then
+            coverage_output=$(pnpm run coverage 2>&1 || true)
+        else
+            coverage_output=$(pnpm test -- --coverage 2>&1 || true)
+        fi
+    else
+        if grep -q '"test:coverage"' package.json; then
+            coverage_output=$(npm run test:coverage 2>&1 || true)
+        elif grep -q '"coverage"' package.json; then
+            coverage_output=$(npm run coverage 2>&1 || true)
+        else
+            coverage_output=$(npm test -- --coverage 2>&1 || true)
+        fi
+    fi
+    
+    # Extract coverage percentage from output
+    # Look for common coverage report patterns
+    if echo "$coverage_output" | grep -q "All files.*%"; then
+        coverage_percentage=$(echo "$coverage_output" | grep "All files" | awk '{for(i=1;i<=NF;i++) if($i ~ /%/) print $i}' | head -1 | sed 's/%//')
+    elif echo "$coverage_output" | grep -q "Statements.*%"; then
+        coverage_percentage=$(echo "$coverage_output" | grep "Statements" | awk '{for(i=1;i<=NF;i++) if($i ~ /%/) print $i}' | head -1 | sed 's/%//')
+    elif echo "$coverage_output" | grep -q "Lines.*%"; then
+        coverage_percentage=$(echo "$coverage_output" | grep "Lines" | awk '{for(i=1;i<=NF;i++) if($i ~ /%/) print $i}' | head -1 | sed 's/%//')
+    fi
+    
+    # Remove any decimal points for comparison
+    coverage_percentage=$(echo "$coverage_percentage" | cut -d. -f1)
+    
+    if [ -z "$coverage_percentage" ] || ! [[ "$coverage_percentage" =~ ^[0-9]+$ ]]; then
+        log "WARNING" "Could not determine test coverage percentage"
+        log "INFO" "Please ensure your test runner outputs coverage information"
+        return 1
+    fi
+    
+    log "INFO" "Current test coverage: ${coverage_percentage}%"
+    
+    if [ "$coverage_percentage" -lt "$REQUIRED_TEST_COVERAGE" ]; then
+        log "ERROR" "Test coverage ${coverage_percentage}% is below required ${REQUIRED_TEST_COVERAGE}%"
+        echo ""
+        echo "📊 Coverage Analysis:"
+        echo "   Current: ${coverage_percentage}%"
+        echo "   Required: ${REQUIRED_TEST_COVERAGE}%"
+        echo "   Gap: $((REQUIRED_TEST_COVERAGE - coverage_percentage))%"
+        echo ""
+        echo "🎯 To improve coverage:"
+        echo "   1. Add tests for uncovered functions/components"
+        echo "   2. Test edge cases and error conditions"
+        echo "   3. Use 'blipee auto-test' to generate test templates"
+        echo "   4. Review coverage report for specific gaps"
+        echo ""
+        return 1
+    fi
+    
+    log "SUCCESS" "Test coverage requirement satisfied (${coverage_percentage}% >= ${REQUIRED_TEST_COVERAGE}%)"
+    return 0
+}
+
+# Check that all tests pass
+check_test_pass_rate() {
+    log "GEAR" "Checking test pass requirement (${REQUIRED_TEST_PASS_RATE}% must pass)..."
+    
+    cd "$PROJECT_ROOT" || return 1
+    
+    if ! grep -q '"test"' package.json 2>/dev/null; then
+        log "WARNING" "No test script found in package.json"
+        return 1
+    fi
+    
+    # Run tests and capture output
+    local test_output=""
+    local test_exit_code=0
+    
+    if command -v pnpm &> /dev/null; then
+        test_output=$(pnpm test 2>&1)
+        test_exit_code=$?
+    else
+        test_output=$(npm test 2>&1)
+        test_exit_code=$?
+    fi
+    
+    # Analyze test results
+    local total_tests=0
+    local passed_tests=0
+    local failed_tests=0
+    
+    # Extract test counts from output (works with Jest, Vitest, Mocha)
+    if echo "$test_output" | grep -q "Tests:.*passed"; then
+        passed_tests=$(echo "$test_output" | grep "Tests:" | awk '{for(i=1;i<=NF;i++) if($(i+1)=="passed") print $i}' | head -1)
+        failed_tests=$(echo "$test_output" | grep "Tests:" | awk '{for(i=1;i<=NF;i++) if($(i+1)=="failed") print $i}' | head -1)
+        total_tests=$((passed_tests + failed_tests))
+    elif echo "$test_output" | grep -q "passing\|failing"; then
+        passed_tests=$(echo "$test_output" | grep -o "[0-9]\+ passing" | cut -d' ' -f1 || echo "0")
+        failed_tests=$(echo "$test_output" | grep -o "[0-9]\+ failing" | cut -d' ' -f1 || echo "0")
+        total_tests=$((passed_tests + failed_tests))
+    fi
+    
+    # If we couldn't parse test counts, check exit code
+    if [ "$total_tests" -eq 0 ]; then
+        if [ "$test_exit_code" -eq 0 ]; then
+            log "SUCCESS" "All tests passed (exit code 0)"
+            return 0
+        else
+            log "ERROR" "Tests failed (exit code $test_exit_code)"
+            echo ""
+            echo "❌ Test Failures Detected:"
+            echo "$test_output" | tail -20
+            echo ""
+            echo "🔧 Next Steps:"
+            echo "   1. Fix failing tests before committing"
+            echo "   2. Run 'blipee test' to see detailed results"
+            echo "   3. Use 'blipee auto-test' for additional test coverage"
+            echo ""
+            return 1
+        fi
+    fi
+    
+    # Calculate pass rate
+    local pass_rate=0
+    if [ "$total_tests" -gt 0 ]; then
+        pass_rate=$((passed_tests * 100 / total_tests))
+    fi
+    
+    log "INFO" "Test Results: $passed_tests/$total_tests passed (${pass_rate}%)"
+    
+    if [ "$pass_rate" -lt "$REQUIRED_TEST_PASS_RATE" ]; then
+        log "ERROR" "Test pass rate ${pass_rate}% is below required ${REQUIRED_TEST_PASS_RATE}%"
+        echo ""
+        echo "📊 Test Analysis:"
+        echo "   Passed: $passed_tests"
+        echo "   Failed: $failed_tests"
+        echo "   Total: $total_tests"
+        echo "   Pass Rate: ${pass_rate}%"
+        echo "   Required: ${REQUIRED_TEST_PASS_RATE}%"
+        echo ""
+        echo "❌ Failing Tests:"
+        echo "$test_output" | grep -A 5 -B 5 "FAIL\|Error\|✕" | head -20
+        echo ""
+        echo "🔧 All tests must pass before committing!"
+        echo ""
+        return 1
+    fi
+    
+    if [ "$failed_tests" -gt 0 ]; then
+        log "ERROR" "$failed_tests test(s) failed. All tests must pass!"
+        return 1
+    fi
+    
+    log "SUCCESS" "All tests passed (${pass_rate}% pass rate)"
+    return 0
+}
+
+# Start development environment
+cmd_start() {
+    log "ROCKET" "Starting Blipee Toolpad development environment..."
+    
+    # Check dependencies
+    if ! check_dependencies; then
+        log "ERROR" "Please install missing dependencies first"
+        return 1
+    fi
+    
+    cd "$PROJECT_ROOT" || exit 1
+    
+    # Quick tidy before starting
+    log "GEAR" "Running quick tidy..."
+    cmd_tidy > /dev/null 2>&1
+    
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "WARNING" "Not in a git repository. Initializing..."
+        git init
+        log "SUCCESS" "Git repository initialized"
+    fi
+    
+    # Install/update dependencies if needed
+    if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
+        log "GEAR" "Installing/updating dependencies..."
+        if command -v pnpm &> /dev/null; then
+            pnpm install
+        else
+            npm install
+        fi
+        log "SUCCESS" "Dependencies updated"
+    fi
+    
+    # Check for outdated packages and offer to update
+    local outdated_count
+    if command -v pnpm &> /dev/null; then
+        outdated_count=$(pnpm outdated 2>/dev/null | grep -c "│" 2>/dev/null || echo "0")
+    else
+        outdated_count=$(npm outdated 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    fi
+    
+    if [ "$outdated_count" -gt 5 ]; then
+        log "WARNING" "$outdated_count packages need updating. Auto-update? (y/N)"
+        read -r -t 10 response || response="n"
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            log "GEAR" "Updating packages..."
+            cmd_update_packages
+        else
+            log "INFO" "Skipping package updates. Run 'blipee update' later."
+        fi
+    fi
+    
+    # Start Claude IDE in background if not running
+    if ! pgrep -f "claude ide" > /dev/null; then
+        log "GEAR" "Starting Claude IDE..."
+        nohup claude ide > "$LOGS_DIR/claude-ide.log" 2>&1 &
+        sleep 2
+        log "SUCCESS" "Claude IDE started"
+    else
+        log "INFO" "Claude IDE already running"
+    fi
+    
+    # Start development server if package.json has dev script
+    if grep -q '"dev"' package.json 2>/dev/null; then
+        log "GEAR" "Starting development server..."
+        if command -v pnpm &> /dev/null; then
+            nohup pnpm run dev > "$LOGS_DIR/dev-server.log" 2>&1 &
+        else
+            nohup npm run dev > "$LOGS_DIR/dev-server.log" 2>&1 &
+        fi
+        sleep 3
+        log "SUCCESS" "Development server started"
+    fi
+    
+    # Open VS Code if not running
+    if ! pgrep -f "Visual Studio Code" > /dev/null; then
+        log "GEAR" "Opening VS Code..."
+        if command -v code &> /dev/null; then
+            code . &
+        elif [ -f "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" ]; then
+            "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" . &
+        else
+            log "WARNING" "VS Code CLI not found. Please install VS Code or add it to PATH"
+        fi
+        log "SUCCESS" "VS Code opened"
+    else
+        log "INFO" "VS Code already running"
+    fi
+    
+    # Show status
+    cmd_status
+    
+    log "SPARKLES" "Development environment ready! Happy coding!"
+}
+
+# Stop development environment
+cmd_stop() {
+    log "GEAR" "Stopping development environment..."
+    
+    # Stop development server
+    if pgrep -f "next-server" > /dev/null || pgrep -f "npm run dev" > /dev/null || pgrep -f "pnpm run dev" > /dev/null; then
+        log "GEAR" "Stopping development server..."
+        pkill -f "next-server" 2>/dev/null || true
+        pkill -f "npm run dev" 2>/dev/null || true
+        pkill -f "pnpm run dev" 2>/dev/null || true
+        log "SUCCESS" "Development server stopped"
+    fi
+    
+    # Stop Claude IDE (optional - user choice)
+    if pgrep -f "claude ide" > /dev/null; then
+        log "WARNING" "Claude IDE is running. Stop it? (y/N)"
+        read -r response
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            pkill -f "claude ide"
+            log "SUCCESS" "Claude IDE stopped"
+        fi
+    fi
+    
+    log "SUCCESS" "Development environment stopped"
+}
+
+# Show comprehensive status
+cmd_status() {
+    log "INFO" "Blipee Toolpad Project Status"
+    echo ""
+    
+    # Change to project root for accurate status
+    cd "$PROJECT_ROOT"
+    
+    # Project info
+    echo -e "${WHITE}📁 Project Information:${NC}"
+    echo -e "  Location: ${CYAN}$PROJECT_ROOT${NC}"
+    echo -e "  Branch: ${CYAN}$(git branch --show-current 2>/dev/null || echo 'Not a git repo')${NC}"
+    
+    # Git status
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        echo -e "  Status: ${CYAN}$(git status --porcelain | wc -l | tr -d ' ') changes${NC}"
+        echo -e "  Last commit: ${CYAN}$(git log -1 --pretty=format:'%h - %s (%cr)' 2>/dev/null || echo 'No commits')${NC}"
+    fi
+    echo ""
+    
+    # Services status
+    echo -e "${WHITE}🚀 Services Status:${NC}"
+    
+    # Development server  
+    if pgrep -f "next-server" > /dev/null || pgrep -f "npm run dev" > /dev/null || pgrep -f "pnpm run dev" > /dev/null; then
+        echo -e "  Dev Server: ${GREEN}${SUCCESS} Running${NC}"
+    else
+        echo -e "  Dev Server: ${RED}${ERROR} Stopped${NC}"
+    fi
+    
+    # Claude IDE (check for actual Claude process)
+    if pgrep -f "claude" > /dev/null || pgrep -f "Claude" > /dev/null; then
+        echo -e "  Claude IDE: ${GREEN}${SUCCESS} Running${NC}"
+    else
+        echo -e "  Claude IDE: ${RED}${ERROR} Stopped${NC}"
+    fi
+    
+    # VS Code
+    if pgrep -f "Visual Studio Code" > /dev/null; then
+        echo -e "  VS Code: ${GREEN}${SUCCESS} Running${NC}"
+    else
+        echo -e "  VS Code: ${RED}${ERROR} Not running${NC}"
+    fi
+    echo ""
+    
+    # Dependencies status
+    echo -e "${WHITE}📦 Dependencies:${NC}"
+    if [ -f "package.json" ]; then
+        if [ -d "node_modules" ]; then
+            echo -e "  Node modules: ${GREEN}${SUCCESS} Installed${NC}"
+        else
+            echo -e "  Node modules: ${RED}${ERROR} Missing${NC}"
+        fi
+        
+        # Check for outdated packages
+        local outdated_count
+        if command -v pnpm &> /dev/null; then
+            outdated_count=$(pnpm outdated 2>/dev/null | grep -c "│" || echo "0")
+        else
+            outdated_count=$(npm outdated 2>/dev/null | wc -l || echo "0")
+        fi
+        
+        if [ "$outdated_count" -gt 0 ]; then
+            echo -e "  Updates: ${YELLOW}${WARNING} $outdated_count packages need updating${NC}"
+        else
+            echo -e "  Updates: ${GREEN}${SUCCESS} All packages up to date${NC}"
+        fi
+    else
+        echo -e "  Package.json: ${RED}${ERROR} Not found${NC}"
+    fi
+    echo ""
+}
+
+# Clean and optimize workspace with intelligent cleanup
+cmd_clean() {
+    local mode="${1:-auto}"
+    local dry_run=false
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dry-run|--preview)
+                dry_run=true
+                shift
+                ;;
+            --deep)
+                mode="deep"
+                shift
+                ;;
+            --safe)
+                mode="safe"
+                shift
+                ;;
+            *)
+                mode="$1"
+                shift
+                ;;
+        esac
+    done
+    
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if [ "$dry_run" = true ]; then
+        log "INFO" "🔍 DRY RUN MODE: Showing what would be cleaned (no files will be deleted)"
+        echo ""
+    fi
+    
+    log "GEAR" "🧹 Starting intelligent workspace cleanup..."
+    echo ""
+    echo "📋 Cleanup Mode: $(echo $mode | tr '[:lower:]' '[:upper:]')"
+    echo "   🟢 Level 1: Build artifacts, logs, cache"
+    echo "   🟡 Level 2: Unused dependencies, duplicates"
+    echo "   🔴 Level 3: Deep analysis, manual review"
+    echo ""
+    
+    local total_freed=0
+    local files_removed=0
+    local backup_created=false
+    
+    # Initialize cleanup statistics
+    cleanup_stats_reset
+    
+    # LEVEL 1: SAFE AUTO-CLEANUP (Always runs)
+    log "GEAR" "🟢 Level 1: Safe Auto-Cleanup"
+    cleanup_level_1 "$dry_run"
+    
+    if [[ "$mode" == "auto" || "$mode" == "guided" || "$mode" == "deep" ]]; then
+        # LEVEL 2: GUIDED CLEANUP (With confirmation)
+        log "GEAR" "🟡 Level 2: Guided Cleanup"
+        cleanup_level_2 "$dry_run"
+    fi
+    
+    if [[ "$mode" == "deep" ]]; then
+        # LEVEL 3: DEEP ANALYSIS (Manual review)
+        log "GEAR" "🔴 Level 3: Deep Analysis"
+        cleanup_level_3 "$dry_run"
+    fi
+    
+    # Show cleanup summary
+    cleanup_show_summary "$dry_run"
+    
+    # Reinstall dependencies if node_modules was cleaned
+    if [ ! -d "node_modules" ] && [ -f "package.json" ] && [ "$dry_run" = false ]; then
+        echo ""
+        log "GEAR" "📦 Reinstalling dependencies..."
+        if command -v pnpm &> /dev/null; then
+            pnpm install --silent
+        else
+            npm install --silent
+        fi
+        log "SUCCESS" "Dependencies reinstalled"
+    fi
+    
+    if [ "$dry_run" = false ]; then
+        log "SPARKLES" "✨ Workspace is now clean, tidy, and optimized!"
+    else
+        log "INFO" "💡 Run without --dry-run to actually perform cleanup"
+    fi
+}
+
+# Initialize cleanup statistics
+cleanup_stats_reset() {
+    CLEANUP_FILES_REMOVED=0
+    CLEANUP_SIZE_FREED=0
+    CLEANUP_DIRS_CLEANED=0
+    CLEANUP_BACKUPS_CREATED=0
+}
+
+# Level 1: Safe auto-cleanup - build artifacts, logs, cache
+cleanup_level_1() {
+    local dry_run="$1"
+    local level1_size=0
+    
+    echo "   🗂️  Build artifacts and generated files..."
+    
+    # Build directories
+    local build_dirs=("dist" "build" ".next" "out" "coverage" ".nuxt" ".output" ".vite" ".rollup.cache")
+    for dir in "${build_dirs[@]}"; do
+        if [ -d "$dir" ]; then
+            local size=$(du -sk "$dir" 2>/dev/null | cut -f1 || echo "0")
+            level1_size=$((level1_size + size))
+            
+            if [ "$dry_run" = false ]; then
+                rm -rf "$dir"
+                log "SUCCESS" "Cleaned: $dir (${size}KB)"
+            else
+                log "INFO" "Would clean: $dir (${size}KB)"
+            fi
+            ((CLEANUP_DIRS_CLEANED++))
+        fi
+    done
+    
+    echo "   🧹 Cache and temporary files..."
+    
+    # Cache directories
+    local cache_dirs=("node_modules/.cache" ".npm" ".pnpm-store" ".yarn/cache" ".cache" ".tmp" ".temp")
+    for cache_dir in "${cache_dirs[@]}"; do
+        if [ -d "$cache_dir" ]; then
+            local size=$(du -sk "$cache_dir" 2>/dev/null | cut -f1 || echo "0")
+            level1_size=$((level1_size + size))
+            
+            if [ "$dry_run" = false ]; then
+                rm -rf "$cache_dir"
+                log "SUCCESS" "Cleaned cache: $cache_dir (${size}KB)"
+            else
+                log "INFO" "Would clean cache: $cache_dir (${size}KB)"
+            fi
+            ((CLEANUP_DIRS_CLEANED++))
+        fi
+    done
+    
+    echo "   📋 Log files and debugging artifacts..."
+    
+    # Log files
+    local log_patterns=("*.log" "logs/*" "debug.log.*" "npm-debug.log*" "yarn-debug.log*" "yarn-error.log*")
+    for pattern in "${log_patterns[@]}"; do
+        while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+                local size=$(du -sk "$file" 2>/dev/null | cut -f1 || echo "0")
+                level1_size=$((level1_size + size))
+                
+                if [ "$dry_run" = false ]; then
+                    rm -f "$file"
+                    log "SUCCESS" "Cleaned log: $(basename "$file") (${size}KB)"
+                else
+                    log "INFO" "Would clean log: $(basename "$file") (${size}KB)"
+                fi
+                ((CLEANUP_FILES_REMOVED++))
+            fi
+        done < <(find . -maxdepth 2 -name "$pattern" -print0 2>/dev/null)
+    done
+    
+    echo "   🖥️  OS and editor temporary files..."
+    
+    # OS/Editor temp files
+    local temp_patterns=(".DS_Store" "Thumbs.db" "desktop.ini" "*~" "*.swp" "*.swo" "*.tmp")
+    for pattern in "${temp_patterns[@]}"; do
+        while IFS= read -r -d '' file; do
+            if [ -f "$file" ]; then
+                if [ "$dry_run" = false ]; then
+                    rm -f "$file"
+                    log "SUCCESS" "Cleaned: $(basename "$file")"
+                else
+                    log "INFO" "Would clean: $(basename "$file")"
+                fi
+                ((CLEANUP_FILES_REMOVED++))
+            fi
+        done < <(find . -name "$pattern" -print0 2>/dev/null)
+    done
+    
+    CLEANUP_SIZE_FREED=$((CLEANUP_SIZE_FREED + level1_size))
+    
+    if [ $level1_size -gt 0 ]; then
+        log "SUCCESS" "Level 1 cleanup: ${level1_size}KB freed"
+    else
+        log "INFO" "Level 1: No cleanup needed - already tidy! ✨"
+    fi
+    echo ""
+}
+
+# Level 2: Guided cleanup - unused files, dependencies
+cleanup_level_2() {
+    local dry_run="$1"
+    local level2_size=0
+    
+    echo "   🔍 Analyzing potentially unused files..."
+    
+    # Check for backup files
+    local backup_files=()
+    while IFS= read -r -d '' file; do
+        backup_files+=("$file")
+    done < <(find . -name "*.backup" -o -name "*.bak" -o -name "*.old" -print0 2>/dev/null)
+    
+    if [ ${#backup_files[@]} -gt 0 ]; then
+        echo ""
+        echo "   📦 Found ${#backup_files[@]} backup files:"
+        for file in "${backup_files[@]}"; do
+            local size=$(du -sk "$file" 2>/dev/null | cut -f1 || echo "0")
+            echo "     • $(basename "$file") (${size}KB)"
+            level2_size=$((level2_size + size))
+        done
+        
+        if [ "$dry_run" = false ]; then
+            echo ""
+            echo -n "   Remove backup files? (y/N): "
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                for file in "${backup_files[@]}"; do
+                    rm -f "$file"
+                    ((CLEANUP_FILES_REMOVED++))
+                done
+                log "SUCCESS" "Removed ${#backup_files[@]} backup files"
+            else
+                log "INFO" "Kept backup files"
+                level2_size=0
+            fi
+        else
+            log "INFO" "Would ask to remove ${#backup_files[@]} backup files"
+        fi
+    fi
+    
+    # Check for large files not in .gitignore
+    echo "   📏 Scanning for large files (>5MB)..."
+    local large_files=()
+    while IFS= read -r -d '' file; do
+        # Skip if in .gitignore or common build dirs
+        if ! echo "$file" | grep -q "node_modules\|dist\|build\|\.git"; then
+            large_files+=("$file")
+        fi
+    done < <(find . -type f -size +5M -print0 2>/dev/null)
+    
+    if [ ${#large_files[@]} -gt 0 ]; then
+        echo ""
+        echo "   📊 Found ${#large_files[@]} large files:"
+        for file in "${large_files[@]}"; do
+            local size=$(du -sh "$file" 2>/dev/null | cut -f1 || echo "?")
+            echo "     • $file ($size)"
+        done
+        
+        if [ "$dry_run" = false ]; then
+            echo ""
+            echo "   💡 Consider adding large files to .gitignore if they're generated"
+            echo "   🔍 Review these files manually - some might be important assets"
+        fi
+    fi
+    
+    # Check for duplicate package manager files
+    echo "   📦 Checking for conflicting package manager files..."
+    local lockfiles=("package-lock.json" "yarn.lock" "pnpm-lock.yaml")
+    local found_lockfiles=()
+    
+    for lockfile in "${lockfiles[@]}"; do
+        if [ -f "$lockfile" ]; then
+            found_lockfiles+=("$lockfile")
+        fi
+    done
+    
+    if [ ${#found_lockfiles[@]} -gt 1 ]; then
+        echo ""
+        echo "   ⚠️  Multiple package manager lock files found:"
+        for lockfile in "${found_lockfiles[@]}"; do
+            echo "     • $lockfile"
+        done
+        
+        if [ "$dry_run" = false ]; then
+            echo ""
+            echo "   💡 You should use only one package manager"
+            echo "   Which lock file to keep? (Enter filename or 'skip'): "
+            read -r keep_lockfile
+            
+            if [[ "$keep_lockfile" != "skip" && " ${found_lockfiles[*]} " =~ " ${keep_lockfile} " ]]; then
+                for lockfile in "${found_lockfiles[@]}"; do
+                    if [[ "$lockfile" != "$keep_lockfile" ]]; then
+                        rm -f "$lockfile"
+                        log "SUCCESS" "Removed: $lockfile"
+                        ((CLEANUP_FILES_REMOVED++))
+                    fi
+                done
+            fi
+        else
+            log "INFO" "Would ask which lock file to keep"
+        fi
+    fi
+    
+    CLEANUP_SIZE_FREED=$((CLEANUP_SIZE_FREED + level2_size))
+    
+    if [ $level2_size -gt 0 ]; then
+        log "SUCCESS" "Level 2 cleanup: ${level2_size}KB freed"
+    else
+        log "INFO" "Level 2: No guided cleanup needed"
+    fi
+    echo ""
+}
+
+# Level 3: Deep analysis - requires manual review
+cleanup_level_3() {
+    local dry_run="$1"
+    
+    echo "   🔬 Deep analysis and unused code detection..."
+    
+    # Check for unused dependencies (basic check)
+    if [ -f "package.json" ]; then
+        echo "   📦 Analyzing dependencies..."
+        
+        # Get all dependencies
+        local deps=$(cat package.json | grep -E '"[^"]+":' | grep -v '"scripts"\|"name"\|"version"\|"description"' | cut -d'"' -f2)
+        local unused_deps=()
+        
+        # Simple check - see if dependency name appears in source files
+        while IFS= read -r dep; do
+            if [ -n "$dep" ] && ! grep -r --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" "$dep" src/ 2>/dev/null | grep -q "import\|require"; then
+                unused_deps+=("$dep")
+            fi
+        done <<< "$deps"
+        
+        if [ ${#unused_deps[@]} -gt 0 ]; then
+            echo ""
+            echo "   🚫 Potentially unused dependencies (manual review needed):"
+            for dep in "${unused_deps[@]}"; do
+                echo "     • $dep"
+            done
+            echo "   💡 Review these manually - some might be used in config files or build scripts"
+        fi
+    fi
+    
+    # Check for orphaned files
+    echo "   🔍 Scanning for orphaned files..."
+    
+    # Find .js/.ts files not imported anywhere
+    local source_files=()
+    if [ -d "src" ]; then
+        while IFS= read -r -d '' file; do
+            local basename=$(basename "$file" | sed 's/\.[^.]*$//')
+            # Check if this file is imported anywhere
+            if ! grep -r --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" "$basename" . 2>/dev/null | grep -q "import\|require"; then
+                source_files+=("$file")
+            fi
+        done < <(find src/ -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" -print0 2>/dev/null)
+        
+        if [ ${#source_files[@]} -gt 0 ]; then
+            echo ""
+            echo "   🔸 Potentially unused source files (careful review needed):"
+            for file in "${source_files[@]}"; do
+                echo "     • $file"
+            done
+            echo "   ⚠️  CAUTION: Manual review required - these might be entry points or dynamically imported"
+        fi
+    fi
+    
+    log "INFO" "Level 3: Deep analysis complete - manual review recommended"
+    echo ""
+}
+
+# Show cleanup summary
+cleanup_show_summary() {
+    local dry_run="$1"
+    
+    echo ""
+    echo "🧹 =================================="
+    echo "   CLEANUP SUMMARY"
+    echo "===================================="
+    echo ""
+    
+    if [ "$dry_run" = true ]; then
+        echo "🔍 DRY RUN RESULTS:"
+    else
+        echo "✅ CLEANUP COMPLETED:"
+    fi
+    
+    echo "   📁 Directories cleaned: $CLEANUP_DIRS_CLEANED"
+    echo "   📄 Files removed: $CLEANUP_FILES_REMOVED"
+    
+    if [ $CLEANUP_SIZE_FREED -gt 1024 ]; then
+        local size_mb=$((CLEANUP_SIZE_FREED / 1024))
+        echo "   💾 Space freed: ${size_mb}MB"
+    else
+        echo "   💾 Space freed: ${CLEANUP_SIZE_FREED}KB"
+    fi
+    
+    if [ $CLEANUP_BACKUPS_CREATED -gt 0 ]; then
+        echo "   🛡️  Backups created: $CLEANUP_BACKUPS_CREATED"
+        echo "   📂 Backup location: .blipee-backups/"
+    fi
+    
+    echo ""
+    
+    if [ $CLEANUP_SIZE_FREED -gt 0 ]; then
+        local percentage_saved=5  # Rough estimate
+        echo "🎯 Project is now ${percentage_saved}% smaller and cleaner!"
+    else
+        echo "✨ Project was already clean and tidy!"
+    fi
+    
+    echo ""
+    echo "💡 Cleanup Tips:"
+    echo "   • Use 'blipee clean --dry-run' to preview changes"
+    echo "   • Use 'blipee clean --deep' for thorough analysis"
+    echo "   • Regular cleanup keeps your project optimized"
+}
+
+# Quick tidy - Level 1 cleanup only
+cmd_tidy() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "🧹 Quick tidy: Cleaning build artifacts, logs, and cache..."
+    
+    # Initialize cleanup statistics
+    cleanup_stats_reset
+    
+    # Run only Level 1 cleanup
+    cleanup_level_1 false
+    
+    # Show brief summary
+    if [ $CLEANUP_SIZE_FREED -gt 0 ]; then
+        if [ $CLEANUP_SIZE_FREED -gt 1024 ]; then
+            local size_mb=$((CLEANUP_SIZE_FREED / 1024))
+            log "SUCCESS" "✨ Quick tidy complete: ${size_mb}MB freed, $CLEANUP_FILES_REMOVED files removed"
+        else
+            log "SUCCESS" "✨ Quick tidy complete: ${CLEANUP_SIZE_FREED}KB freed, $CLEANUP_FILES_REMOVED files removed"
+        fi
+    else
+        log "SUCCESS" "✨ Project is already tidy!"
+    fi
+}
+
+# Update packages command
+cmd_update_packages() {
+    log "GEAR" "Updating packages to latest versions..."
+    cd "$PROJECT_ROOT"
+    
+    if command -v pnpm &> /dev/null; then
+        # Update with pnpm
+        log "INFO" "Using pnpm for updates..."
+        pnpm update
+        if [ $? -eq 0 ]; then
+            log "SUCCESS" "Packages updated successfully with pnpm"
+        else
+            log "ERROR" "Failed to update packages with pnpm"
+            return 1
+        fi
+    else
+        # Update with npm
+        log "INFO" "Using npm for updates..."
+        npm update
+        if [ $? -eq 0 ]; then
+            log "SUCCESS" "Packages updated successfully with npm"
+        else
+            log "ERROR" "Failed to update packages with npm"
+            return 1
+        fi
+    fi
+    
+    # Show summary
+    local outdated_count
+    if command -v pnpm &> /dev/null; then
+        outdated_count=$(pnpm outdated 2>/dev/null | grep -c "│" 2>/dev/null || echo "0")
+    else
+        outdated_count=$(npm outdated 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    fi
+    
+    if [ "$outdated_count" -eq 0 ]; then
+        log "SUCCESS" "All packages are now up to date!"
+    else
+        log "WARNING" "$outdated_count packages still need manual review"
+        log "INFO" "Run 'npm outdated' or 'pnpm outdated' to see details"
+    fi
+}
+
+# Health check
+cmd_health() {
+    log "INFO" "Running comprehensive health check..."
+    echo ""
+    
+    local issues=0
+    
+    # Check system dependencies
+    echo -e "${WHITE}🔧 System Dependencies:${NC}"
+    local deps=("node" "npm" "git" "code" "brew")
+    for dep in "${deps[@]}"; do
+        if command -v "$dep" &> /dev/null; then
+            echo -e "  $dep: ${GREEN}${SUCCESS} Available${NC}"
+        else
+            echo -e "  $dep: ${RED}${ERROR} Missing${NC}"
+            ((issues++))
+        fi
+    done
+    echo ""
+    
+    # Check project health
+    echo -e "${WHITE}📁 Project Health:${NC}"
+    
+    # Package.json
+    if [ -f "package.json" ]; then
+        echo -e "  package.json: ${GREEN}${SUCCESS} Found${NC}"
+    else
+        echo -e "  package.json: ${RED}${ERROR} Missing${NC}"
+        ((issues++))
+    fi
+    
+    # Node modules
+    if [ -d "node_modules" ]; then
+        echo -e "  node_modules: ${GREEN}${SUCCESS} Installed${NC}"
+    else
+        echo -e "  node_modules: ${YELLOW}${WARNING} Missing (run: blipee start)${NC}"
+    fi
+    
+    # Git repository
+    if git rev-parse --git-dir > /dev/null 2>&1; then
+        echo -e "  Git repo: ${GREEN}${SUCCESS} Initialized${NC}"
+    else
+        echo -e "  Git repo: ${YELLOW}${WARNING} Not initialized${NC}"
+    fi
+    echo ""
+    
+    # Performance check
+    echo -e "${WHITE}⚡ Performance:${NC}"
+    
+    # Disk space
+    local disk_usage=$(df "$PROJECT_ROOT" | awk 'NR==2 {print $5}' | sed 's/%//')
+    if [ "$disk_usage" -lt 90 ]; then
+        echo -e "  Disk space: ${GREEN}${SUCCESS} ${disk_usage}% used${NC}"
+    else
+        echo -e "  Disk space: ${RED}${ERROR} ${disk_usage}% used (cleanup needed)${NC}"
+        ((issues++))
+    fi
+    
+    # Memory usage
+    local memory_pressure=$(memory_pressure 2>/dev/null | grep "System-wide memory free percentage" | awk '{print $5}' | sed 's/%//')
+    if [ -n "$memory_pressure" ] && [ "$memory_pressure" -gt 20 ]; then
+        echo -e "  Memory: ${GREEN}${SUCCESS} ${memory_pressure}% free${NC}"
+    else
+        echo -e "  Memory: ${YELLOW}${WARNING} Low memory available${NC}"
+    fi
+    echo ""
+    
+    # Summary
+    if [ $issues -eq 0 ]; then
+        log "SUCCESS" "Health check passed! System is optimal."
+    else
+        log "WARNING" "Health check found $issues issues. See recommendations above."
+    fi
+}
+
+# Smart commit with STRICT quality enforcement
+cmd_commit() {
+    local message="$*"
+    
+    if [ -z "$message" ]; then
+        log "ERROR" "Commit message required. Usage: blipee commit 'your message'"
+        return 1
+    fi
+    
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "ERROR" "Not in a git repository"
+        return 1
+    fi
+    
+    log "GEAR" "Running STRICT quality enforcement commit workflow..."
+    echo ""
+    echo "📋 Quality Standards Enforced:"
+    echo "   📚 Documentation-first development"
+    echo "   📊 ${REQUIRED_TEST_COVERAGE}% test coverage minimum"
+    echo "   ✅ ${REQUIRED_TEST_PASS_RATE}% test pass rate required"
+    echo ""
+    
+    # Check for uncommitted changes
+    if git diff --quiet && git diff --cached --quiet; then
+        log "WARNING" "No changes to commit"
+        return 1
+    fi
+    
+    # Stage all changes for analysis
+    git add .
+    
+    # STRICT QUALITY GATES - ALL MUST PASS
+    
+    # 1. Documentation-first check
+    if ! check_documentation_first; then
+        log "ERROR" "BLOCKING: Documentation-first requirement not met"
+        echo ""
+        echo "🚫 Commit blocked until documentation is added"
+        echo "💡 Add documentation first, then commit"
+        return 1
+    fi
+    
+    # 2. Code formatting (must be clean)
+    if grep -q '"format"' package.json 2>/dev/null; then
+        log "GEAR" "Enforcing code formatting..."
+        if command -v pnpm &> /dev/null; then
+            if ! pnpm run format; then
+                log "ERROR" "BLOCKING: Code formatting failed"
+                return 1
+            fi
+        else
+            if ! npm run format; then
+                log "ERROR" "BLOCKING: Code formatting failed" 
+                return 1
+            fi
+        fi
+        log "SUCCESS" "Code formatting passed"
+    fi
+    
+    # 3. Linting (must pass)
+    if grep -q '"lint"' package.json 2>/dev/null; then
+        log "GEAR" "Enforcing linting standards..."
+        if command -v pnpm &> /dev/null; then
+            if ! pnpm run lint; then
+                log "ERROR" "BLOCKING: Linting failed"
+                echo ""
+                echo "🚫 Fix all linting errors before committing"
+                echo "💡 Run 'blipee lint' to see issues"
+                return 1
+            fi
+        else
+            if ! npm run lint; then
+                log "ERROR" "BLOCKING: Linting failed"
+                echo ""
+                echo "🚫 Fix all linting errors before committing"
+                echo "💡 Run 'blipee lint' to see issues"
+                return 1
+            fi
+        fi
+        log "SUCCESS" "Linting standards passed"
+    fi
+    
+    # 4. Test pass rate (100% required)
+    if ! check_test_pass_rate; then
+        log "ERROR" "BLOCKING: Test pass rate requirement not met"
+        echo ""
+        echo "🚫 Commit blocked until ALL tests pass"
+        echo "💡 Fix failing tests before committing"
+        return 1
+    fi
+    
+    # 5. Test coverage (95% required)
+    if ! check_test_coverage; then
+        log "ERROR" "BLOCKING: Test coverage requirement not met"
+        echo ""
+        echo "🚫 Commit blocked until ${REQUIRED_TEST_COVERAGE}% coverage achieved"
+        echo "💡 Add more tests or use 'blipee auto-test'"
+        return 1
+    fi
+    
+    # Re-stage any files modified by formatters
+    git add .
+    
+    # Show what will be committed
+    echo ""
+    log "INFO" "Files to be committed (after quality enforcement):"
+    git diff --cached --name-status | while read status file; do
+        case $status in
+            "A") echo -e "  ${GREEN}+${NC} $file" ;;
+            "M") echo -e "  ${YELLOW}~${NC} $file" ;;
+            "D") echo -e "  ${RED}-${NC} $file" ;;
+            *) echo -e "  ${CYAN}?${NC} $file" ;;
+        esac
+    done
+    echo ""
+    
+    # All quality gates passed!
+    echo ""
+    log "SUCCESS" "🎉 ALL QUALITY GATES PASSED!"
+    echo ""
+    echo "✅ Documentation-first: PASSED"
+    echo "✅ Code formatting: PASSED"
+    echo "✅ Linting standards: PASSED"
+    echo "✅ Test pass rate: PASSED"
+    echo "✅ Test coverage: PASSED"
+    echo ""
+    
+    # Final confirmation
+    log "INFO" "Commit message: '$message'"
+    echo -n -e "${GREEN}${SUCCESS} All quality checks passed! Proceed with commit? (Y/n): ${NC}"
+    read -r response
+    
+    if [[ "$response" =~ ^[Nn]$ ]]; then
+        log "INFO" "Commit cancelled"
+        return 0
+    fi
+    
+    # Perform commit
+    if git commit -m "$message"; then
+        log "SUCCESS" "✨ High-quality commit successful!"
+        
+        # Ask about pushing
+        echo -n -e "${CYAN}${INFO} Push to remote? (y/N): ${NC}"
+        read -r push_response
+        
+        if [[ "$push_response" =~ ^[Yy]$ ]]; then
+            cmd_push
+        fi
+    else
+        log "ERROR" "Commit failed"
+        return 1
+    fi
+}
+
+# Safe push with validation
+cmd_push() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "ERROR" "Not in a git repository"
+        return 1
+    fi
+    
+    local current_branch=$(git branch --show-current)
+    
+    if [ -z "$current_branch" ]; then
+        log "ERROR" "No current branch"
+        return 1
+    fi
+    
+    log "GEAR" "Pushing branch '$current_branch' to remote..."
+    
+    # Check if remote exists
+    if ! git remote | grep -q "origin"; then
+        log "WARNING" "No 'origin' remote found. Add remote first."
+        return 1
+    fi
+    
+    # Check if branch exists on remote
+    if ! git ls-remote --heads origin "$current_branch" | grep -q "$current_branch"; then
+        log "INFO" "Branch '$current_branch' doesn't exist on remote. Creating..."
+        if git push -u origin "$current_branch"; then
+            log "SUCCESS" "Branch pushed and tracking set up"
+        else
+            log "ERROR" "Failed to push branch"
+            return 1
+        fi
+    else
+        # Regular push
+        if git push; then
+            log "SUCCESS" "Push successful"
+        else
+            log "ERROR" "Push failed"
+            return 1
+        fi
+    fi
+}
+
+# Sync with remote (pull + push)
+cmd_sync() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "ERROR" "Not in a git repository"
+        return 1
+    fi
+    
+    log "GEAR" "Syncing with remote..."
+    
+    # Fetch latest changes
+    log "GEAR" "Fetching latest changes..."
+    if git fetch; then
+        log "SUCCESS" "Fetch successful"
+    else
+        log "ERROR" "Fetch failed"
+        return 1
+    fi
+    
+    # Check if there are remote changes
+    local behind_count=$(git rev-list --count HEAD..@{u} 2>/dev/null || echo "0")
+    
+    if [ "$behind_count" -gt 0 ]; then
+        log "INFO" "$behind_count commits behind remote"
+        
+        # Check for local changes
+        if ! git diff --quiet || ! git diff --cached --quiet; then
+            log "WARNING" "Local changes detected. Stashing before pull..."
+            git stash push -m "Auto-stash before sync $(date)"
+            local stashed=true
+        fi
+        
+        # Pull changes
+        if git pull; then
+            log "SUCCESS" "Pull successful"
+            
+            # Restore stashed changes if any
+            if [ "$stashed" = true ]; then
+                log "GEAR" "Restoring stashed changes..."
+                git stash pop
+                log "SUCCESS" "Stashed changes restored"
+            fi
+        else
+            log "ERROR" "Pull failed"
+            return 1
+        fi
+    else
+        log "INFO" "Already up to date with remote"
+    fi
+    
+    # Push any local commits
+    local ahead_count=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
+    
+    if [ "$ahead_count" -gt 0 ]; then
+        log "INFO" "$ahead_count commits ahead of remote"
+        cmd_push
+    fi
+}
+
+# Create branch with conventions
+cmd_branch() {
+    local branch_name="$1"
+    
+    if [ -z "$branch_name" ]; then
+        log "ERROR" "Branch name required. Usage: blipee branch <name>"
+        return 1
+    fi
+    
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "ERROR" "Not in a git repository"
+        return 1
+    fi
+    
+    # Clean branch name (replace spaces with hyphens, lowercase)
+    branch_name=$(echo "$branch_name" | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]/-/g' | sed 's/[^a-z0-9-]//g')
+    
+    # Add prefix if not present
+    if [[ ! "$branch_name" =~ ^(feature|bugfix|hotfix|release)/ ]]; then
+        # Try to determine type from name
+        if [[ "$branch_name" =~ ^(fix|bug) ]]; then
+            branch_name="bugfix/$branch_name"
+        elif [[ "$branch_name" =~ ^(release|rel) ]]; then
+            branch_name="release/$branch_name"
+        elif [[ "$branch_name" =~ ^(hot|hotfix) ]]; then
+            branch_name="hotfix/$branch_name"
+        else
+            branch_name="feature/$branch_name"
+        fi
+    fi
+    
+    log "GEAR" "Creating branch '$branch_name'..."
+    
+    # Check if branch already exists
+    if git branch --list | grep -q "$branch_name"; then
+        log "ERROR" "Branch '$branch_name' already exists"
+        return 1
+    fi
+    
+    # Create and checkout branch
+    if git checkout -b "$branch_name"; then
+        log "SUCCESS" "Branch '$branch_name' created and checked out"
+        
+        # Ask about pushing to remote
+        echo -n -e "${CYAN}${INFO} Push branch to remote? (y/N): ${NC}"
+        read -r response
+        
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            git push -u origin "$branch_name"
+            log "SUCCESS" "Branch pushed to remote and tracking set up"
+        fi
+    else
+        log "ERROR" "Failed to create branch"
+        return 1
+    fi
+}
+
+# Quality checks
+cmd_format() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Formatting code..."
+    
+    if grep -q '"format"' package.json 2>/dev/null; then
+        if command -v pnpm &> /dev/null; then
+            pnpm run format
+        else
+            npm run format
+        fi
+        log "SUCCESS" "Code formatted"
+    else
+        log "WARNING" "No format script found in package.json"
+        
+        # Try common formatters
+        if command -v prettier &> /dev/null; then
+            log "GEAR" "Running prettier..."
+            prettier --write "src/**/*.{js,jsx,ts,tsx,css,scss,json}" 2>/dev/null || true
+            log "SUCCESS" "Prettier formatting complete"
+        fi
+    fi
+}
+
+cmd_lint() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Linting code..."
+    
+    if grep -q '"lint"' package.json 2>/dev/null; then
+        if command -v pnpm &> /dev/null; then
+            pnpm run lint
+        else
+            npm run lint
+        fi
+        log "SUCCESS" "Linting complete"
+    else
+        log "WARNING" "No lint script found in package.json"
+        
+        # Try common linters
+        if command -v eslint &> /dev/null; then
+            log "GEAR" "Running eslint..."
+            eslint "src/**/*.{js,jsx,ts,tsx}" --fix 2>/dev/null || true
+            log "SUCCESS" "ESLint complete"
+        fi
+    fi
+}
+
+cmd_test() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Running tests..."
+    
+    if grep -q '"test"' package.json 2>/dev/null; then
+        if command -v pnpm &> /dev/null; then
+            pnpm test
+        else
+            npm test
+        fi
+        log "SUCCESS" "Tests complete"
+    else
+        log "WARNING" "No test script found in package.json"
+    fi
+}
+
+cmd_check() {
+    log "GEAR" "Running comprehensive quality checks..."
+    
+    local checks_passed=0
+    local total_checks=3
+    
+    # Format
+    if cmd_format; then
+        ((checks_passed++))
+    fi
+    
+    # Lint
+    if cmd_lint; then
+        ((checks_passed++))
+    fi
+    
+    # Test
+    if cmd_test; then
+        ((checks_passed++))
+    fi
+    
+    echo ""
+    if [ $checks_passed -eq $total_checks ]; then
+        log "SUCCESS" "All quality checks passed! ($checks_passed/$total_checks)"
+    else
+        log "WARNING" "Some quality checks failed ($checks_passed/$total_checks)"
+    fi
+}
+
+# Start file watcher
+cmd_watch() {
+    local watcher_script="$AUTOMATION_DIR/scripts/file-watcher.sh"
+    
+    if [ ! -f "$watcher_script" ]; then
+        log "ERROR" "File watcher script not found: $watcher_script"
+        return 1
+    fi
+    
+    # Check if already running
+    if pgrep -f "file-watcher.sh" > /dev/null; then
+        log "WARNING" "File watcher is already running"
+        log "INFO" "Use 'blipee watch-stop' to stop it first"
+        return 1
+    fi
+    
+    log "GEAR" "Starting file watcher for automated code quality..."
+    
+    # Start in background
+    nohup "$watcher_script" > "$LOGS_DIR/file-watcher-output.log" 2>&1 &
+    local watcher_pid=$!
+    
+    # Save PID for later stopping
+    echo $watcher_pid > "$LOGS_DIR/file-watcher.pid"
+    
+    sleep 2
+    
+    if pgrep -f "file-watcher.sh" > /dev/null; then
+        log "SUCCESS" "File watcher started (PID: $watcher_pid)"
+        log "INFO" "Files will be automatically formatted and linted on save"
+        log "INFO" "View logs: blipee logs"
+        log "INFO" "Stop watcher: blipee watch-stop"
+    else
+        log "ERROR" "Failed to start file watcher"
+        return 1
+    fi
+}
+
+# Stop file watcher
+cmd_watch_stop() {
+    local pid_file="$LOGS_DIR/file-watcher.pid"
+    
+    if [ -f "$pid_file" ]; then
+        local pid=$(cat "$pid_file")
+        
+        if kill "$pid" 2>/dev/null; then
+            log "SUCCESS" "File watcher stopped (PID: $pid)"
+            rm -f "$pid_file"
+        else
+            log "WARNING" "File watcher process not found (PID: $pid)"
+            rm -f "$pid_file"
+        fi
+    else
+        # Try to kill by process name
+        if pgrep -f "file-watcher.sh" > /dev/null; then
+            pkill -f "file-watcher.sh"
+            log "SUCCESS" "File watcher stopped"
+        else
+            log "INFO" "File watcher is not running"
+        fi
+    fi
+}
+
+# AI-assisted smart commit
+cmd_smart_commit() {
+    local smart_commit_script="$AUTOMATION_DIR/scripts/smart-commit.sh"
+    
+    if [ ! -f "$smart_commit_script" ]; then
+        log "ERROR" "Smart commit script not found: $smart_commit_script"
+        return 1
+    fi
+    
+    cd "$PROJECT_ROOT" || exit 1
+    
+    if ! git rev-parse --git-dir > /dev/null 2>&1; then
+        log "ERROR" "Not in a git repository"
+        return 1
+    fi
+    
+    log "SPARKLES" "Starting AI-assisted smart commit..."
+    "$smart_commit_script"
+}
+
+# Auto-generate and run tests
+cmd_auto_test() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Auto-generating tests for new/modified files..."
+    
+    # Find recently modified JS/TS files without tests
+    local files_needing_tests=()
+    
+    # Check git status for modified files
+    while IFS= read -r file; do
+        if [[ "$file" =~ \.(js|jsx|ts|tsx)$ ]] && [[ ! "$file" =~ \.(test|spec)\. ]]; then
+            # Check if test file exists
+            local test_file=""
+            local base_name=$(basename "$file" | sed 's/\.[^.]*$//')
+            local dir_name=$(dirname "$file")
+            
+            # Common test file patterns
+            for pattern in "${base_name}.test.js" "${base_name}.test.ts" "${base_name}.spec.js" "${base_name}.spec.ts"; do
+                if [ ! -f "$dir_name/$pattern" ] && [ ! -f "$dir_name/__tests__/$pattern" ]; then
+                    files_needing_tests+=("$file")
+                    break
+                fi
+            done
+        fi
+    done < <(git diff --name-only HEAD~1 2>/dev/null || git ls-files --others --exclude-standard)
+    
+    if [ ${#files_needing_tests[@]} -eq 0 ]; then
+        log "INFO" "No files found that need test generation"
+        return 0
+    fi
+    
+    log "INFO" "Files needing tests: ${files_needing_tests[*]}"
+    
+    # For each file, generate a basic test template
+    for file in "${files_needing_tests[@]}"; do
+        generate_test_template "$file"
+    done
+    
+    # Run existing tests
+    cmd_test
+}
+
+# Generate test template for a file
+generate_test_template() {
+    local file="$1"
+    local base_name=$(basename "$file" | sed 's/\.[^.]*$//')
+    local dir_name=$(dirname "$file")
+    local test_dir="$dir_name"
+    
+    # Create __tests__ directory if it doesn't exist
+    if [ ! -d "$test_dir/__tests__" ]; then
+        mkdir -p "$test_dir/__tests__"
+        test_dir="$test_dir/__tests__"
+    fi
+    
+    local test_file="$test_dir/${base_name}.test.js"
+    
+    if [ -f "$test_file" ]; then
+        log "INFO" "Test file already exists: $test_file"
+        return 0
+    fi
+    
+    log "GEAR" "Generating test template for: $file"
+    
+    # Generate basic test template
+    cat > "$test_file" << EOF
+import { describe, it, expect } from 'vitest';
+// import { render, screen } from '@testing-library/react'; // For React components
+// import ${base_name} from '../${base_name}';
+
+describe('${base_name}', () => {
+  it('should be defined', () => {
+    // TODO: Add test implementation
+    expect(true).toBe(true);
+  });
+
+  // TODO: Add more specific tests based on the functionality
+  // Example for React components:
+  // it('should render correctly', () => {
+  //   render(<${base_name} />);
+  //   expect(screen.getByRole('...')).toBeInTheDocument();
+  // });
+
+  // Example for utility functions:
+  // it('should return expected result', () => {
+  //   const result = ${base_name}(input);
+  //   expect(result).toBe(expectedOutput);
+  // });
+});
+EOF
+    
+    log "SUCCESS" "Test template created: $test_file"
+}
+
+# AI-assisted refactoring
+cmd_refactor() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Starting AI-assisted refactoring analysis..."
+    
+    # Analyze codebase for refactoring opportunities
+    echo ""
+    log "INFO" "Analyzing codebase for refactoring opportunities..."
+    
+    # Check for common refactoring targets
+    echo ""
+    echo "🔍 Refactoring Analysis Results:"
+    echo ""
+    
+    # Large files
+    echo "📄 Large files (>300 lines):"
+    find . -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" | \
+        xargs wc -l | \
+        awk '$1 > 300 && $2 != "total" {print "  " $2 " (" $1 " lines)"}' | \
+        head -5
+    
+    # Duplicate code patterns
+    echo ""
+    echo "🔄 Potential duplicate code patterns:"
+    # Look for similar function/method patterns
+    grep -r "function\|const.*=" --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" . | \
+        head -5 | \
+        sed 's/^/  /'
+    
+    # TODO comments
+    echo ""
+    echo "📝 TODO items for refactoring:"
+    grep -r "TODO\|FIXME\|HACK" --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" . | \
+        head -5 | \
+        sed 's/^/  /'
+    
+    # Complex files (many imports)
+    echo ""
+    echo "📦 Files with many dependencies:"
+    grep -r "^import\|^require" --include="*.js" --include="*.jsx" --include="*.ts" --include="*.tsx" . | \
+        cut -d: -f1 | \
+        sort | \
+        uniq -c | \
+        sort -nr | \
+        head -5 | \
+        awk '{print "  " $2 " (" $1 " imports)"}'
+    
+    echo ""
+    log "INFO" "Refactoring analysis complete. Use this information to prioritize refactoring tasks."
+    log "INFO" "Consider using Claude Code AI for specific refactoring suggestions."
+}
+
+# Generate documentation
+cmd_docs() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Generating project documentation..."
+    
+    # Create docs directory if it doesn't exist
+    mkdir -p docs
+    
+    # Generate API documentation if it's a library
+    if [ -f "package.json" ] && grep -q '"main":\|"exports":' package.json; then
+        log "GEAR" "Generating API documentation..."
+        
+        # Create basic API docs template
+        cat > docs/API.md << EOF
+# API Documentation
+
+## Overview
+$(cat package.json | jq -r '.description // "No description available"')
+
+## Installation
+\`\`\`bash
+npm install $(cat package.json | jq -r '.name')
+\`\`\`
+
+## Usage
+\`\`\`javascript
+// TODO: Add usage examples
+\`\`\`
+
+## API Reference
+<!-- TODO: Add API reference -->
+
+## Examples
+<!-- TODO: Add examples -->
+EOF
+        log "SUCCESS" "API documentation template created: docs/API.md"
+    fi
+    
+    # Generate component documentation for React projects
+    if [ -d "src/components" ] || [ -d "components" ]; then
+        log "GEAR" "Generating component documentation..."
+        
+        cat > docs/COMPONENTS.md << EOF
+# Component Documentation
+
+## Available Components
+
+$(find src/components components 2>/dev/null | grep -E '\.(jsx?|tsx?)$' | head -10 | while read file; do
+    component_name=$(basename "$file" | sed 's/\.[^.]*$//')
+    echo "### $component_name"
+    echo "Location: \`$file\`"
+    echo ""
+    echo "<!-- TODO: Add component description and props -->"
+    echo ""
+done)
+
+## Usage Guidelines
+<!-- TODO: Add usage guidelines -->
+EOF
+        log "SUCCESS" "Component documentation created: docs/COMPONENTS.md"
+    fi
+    
+    # Update main README if it exists
+    if [ -f "README.md" ]; then
+        log "GEAR" "Checking README.md completeness..."
+        
+        # Check for common README sections
+        local missing_sections=()
+        
+        if ! grep -q "## Installation\|# Installation" README.md; then
+            missing_sections+=("Installation")
+        fi
+        
+        if ! grep -q "## Usage\|# Usage" README.md; then
+            missing_sections+=("Usage")
+        fi
+        
+        if ! grep -q "## API\|# API\|## Documentation\|# Documentation" README.md; then
+            missing_sections+=("Documentation")
+        fi
+        
+        if [ ${#missing_sections[@]} -gt 0 ]; then
+            log "INFO" "README.md is missing sections: ${missing_sections[*]}"
+            log "INFO" "Consider adding these sections for better documentation"
+        else
+            log "SUCCESS" "README.md appears complete"
+        fi
+    fi
+    
+    log "SUCCESS" "Documentation generation complete!"
+    log "INFO" "Generated documentation in ./docs/"
+}
+
+# Pre-development documentation check
+cmd_pre_dev() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Running pre-development documentation check..."
+    echo ""
+    echo "📋 Pre-Development Quality Gate:"
+    echo "   📚 Documentation-first development enforced"
+    echo "   📊 ${REQUIRED_TEST_COVERAGE}% test coverage minimum"
+    echo "   ✅ ${REQUIRED_TEST_PASS_RATE}% test pass rate required"
+    echo ""
+    
+    local failed_checks=0
+    
+    # 1. Check documentation-first requirement
+    log "GEAR" "Checking documentation-first requirement..."
+    if ! check_documentation_first; then
+        log "ERROR" "Documentation-first requirement not met"
+        ((failed_checks++))
+    else
+        log "SUCCESS" "Documentation-first requirement satisfied"
+    fi
+    
+    # 2. Check test coverage
+    log "GEAR" "Checking test coverage requirement..."
+    if ! check_test_coverage; then
+        log "ERROR" "Test coverage requirement not met"
+        ((failed_checks++))
+    else
+        log "SUCCESS" "Test coverage requirement satisfied"
+    fi
+    
+    # 3. Check test pass rate
+    log "GEAR" "Checking test pass rate requirement..."
+    if ! check_test_pass_rate; then
+        log "ERROR" "Test pass rate requirement not met"
+        ((failed_checks++))
+    else
+        log "SUCCESS" "Test pass rate requirement satisfied"
+    fi
+    
+    echo ""
+    if [ $failed_checks -eq 0 ]; then
+        log "SUCCESS" "🎉 All pre-development checks passed!"
+        echo ""
+        echo "✅ Ready for development:"
+        echo "   • Documentation is in place"
+        echo "   • Test coverage meets standards"
+        echo "   • All tests are passing"
+        echo ""
+        echo "🚀 You can now proceed with development confidently!"
+        return 0
+    else
+        log "ERROR" "❌ $failed_checks pre-development check(s) failed"
+        echo ""
+        echo "🚫 Development should be paused until issues are resolved"
+        echo "💡 Follow the documentation-first approach:"
+        echo "   1. Document what you plan to build"
+        echo "   2. Write tests for the expected behavior"
+        echo "   3. Implement the functionality"
+        echo "   4. Verify all quality gates pass"
+        echo ""
+        return 1
+    fi
+}
+
+# Check current test coverage status
+cmd_coverage() {
+    cd "$PROJECT_ROOT" || exit 1
+    
+    log "GEAR" "Checking current test coverage status..."
+    echo ""
+    echo "📊 Test Coverage Analysis"
+    echo "   Target: ${REQUIRED_TEST_COVERAGE}% minimum coverage"
+    echo "   Pass Rate: ${REQUIRED_TEST_PASS_RATE}% required"
+    echo ""
+    
+    # Check if test coverage is configured
+    if ! grep -q '"coverage"\|"test.*coverage"\|"nyc"\|"jest.*coverage"\|"vitest.*coverage"' package.json 2>/dev/null; then
+        log "WARNING" "No test coverage configuration found"
+        echo ""
+        echo "⚠️  Coverage Setup Missing:"
+        echo "   • No coverage scripts in package.json"
+        echo "   • Consider adding test coverage configuration"
+        echo ""
+        echo "💡 Common coverage setups:"
+        echo '   "scripts": {'
+        echo '     "test:coverage": "jest --coverage",'
+        echo '     "coverage": "vitest --coverage"'
+        echo '   }'
+        echo ""
+        return 1
+    fi
+    
+    # Run coverage check
+    if check_test_coverage; then
+        log "SUCCESS" "Coverage check completed successfully"
+        echo ""
+        echo "🎯 Coverage Status: PASSING"
+        echo "   • Meets minimum ${REQUIRED_TEST_COVERAGE}% threshold"
+        echo "   • Quality gate satisfied"
+        echo ""
+    else
+        log "WARNING" "Coverage check failed"
+        echo ""
+        echo "📈 Improvement Suggestions:"
+        echo "   1. Use 'blipee auto-test' to generate test templates"
+        echo "   2. Focus on untested functions and components"
+        echo "   3. Add edge case and error condition tests"
+        echo "   4. Review coverage report for specific gaps"
+        echo ""
+        echo "🔍 Detailed coverage report:"
+        echo "   Run your test runner with --coverage flag"
+        echo ""
+    fi
+    
+    # Also check test pass rate
+    echo "🧪 Test Pass Rate Check:"
+    if check_test_pass_rate; then
+        log "SUCCESS" "All tests are passing"
+        echo "   • ${REQUIRED_TEST_PASS_RATE}% pass rate achieved"
+        echo "   • Quality gate satisfied"
+    else
+        log "WARNING" "Some tests are failing"
+        echo "   • Fix failing tests before committing"
+        echo "   • Use 'blipee test' for detailed results"
+    fi
+    
+    echo ""
+    log "INFO" "Use 'blipee pre-dev' to run complete pre-development checks"
+}
+
+# Main command dispatcher
+main() {
+    case "${1:-help}" in
+        "start")
+            cmd_start
+            ;;
+        "stop")
+            cmd_stop
+            ;;
+        "status")
+            cmd_status
+            ;;
+        "clean")
+            shift
+            cmd_clean "$@"
+            ;;
+        "tidy")
+            cmd_tidy
+            ;;
+        "health")
+            cmd_health
+            ;;
+        "commit")
+            shift
+            cmd_commit "$@"
+            ;;
+        "push")
+            cmd_push
+            ;;
+        "sync")
+            cmd_sync
+            ;;
+        "branch")
+            cmd_branch "$2"
+            ;;
+        "format")
+            cmd_format
+            ;;
+        "lint")
+            cmd_lint
+            ;;
+        "test")
+            cmd_test
+            ;;
+        "check")
+            cmd_check
+            ;;
+        "watch")
+            cmd_watch
+            ;;
+        "watch-stop")
+            cmd_watch_stop
+            ;;
+        "smart-commit")
+            cmd_smart_commit
+            ;;
+        "auto-test")
+            cmd_auto_test
+            ;;
+        "refactor")
+            cmd_refactor
+            ;;
+        "docs")
+            cmd_docs
+            ;;
+        "pre-dev")
+            cmd_pre_dev
+            ;;
+        "coverage")
+            cmd_coverage
+            ;;
+        "update")
+            cmd_update_packages
+            ;;
+        "logs")
+            if [ -f "$LOGS_DIR/blipee.log" ]; then
+                tail -f "$LOGS_DIR/blipee.log"
+            else
+                log "INFO" "No logs found"
+            fi
+            ;;
+        "version")
+            echo "Blipee Toolpad Automation CLI v$VERSION"
+            ;;
+        "help"|"-h"|"--help")
+            show_help
+            ;;
+        *)
+            log "ERROR" "Unknown command: $1"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"
